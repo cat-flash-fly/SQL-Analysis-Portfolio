@@ -143,4 +143,55 @@ FROM chocolate_sales
 GROUP BY DATE_FORMAT(sale_date, '%Y-%m'), YEAR(sale_date), MONTH(sale_date)
 ORDER BY YEAR(sale_date), MONTH(sale_date);
 
+# 每个国家的畅销Top 3产品（按销售额排名）
+WITH country_product_rank AS (
+    SELECT 
+        country,
+        product,
+        ROUND(SUM(amount), 2) AS total_sales,
+        SUM(boxes_shipped) AS total_boxes,
+        RANK() OVER (PARTITION BY country ORDER BY SUM(amount) DESC) AS rank_in_country
+    FROM chocolate_sales
+    GROUP BY country, product
+)
+SELECT 
+    country,
+    product,
+    total_sales,
+    total_boxes,
+    rank_in_country
+FROM country_product_rank
+WHERE rank_in_country <= 3
+ORDER BY country, rank_in_country;
+
+# 国家价值分层（按总销售额分类）
+SELECT 
+    country,
+    ROUND(SUM(amount), 2) AS total_sales,
+    SUM(boxes_shipped) AS total_boxes,
+    COUNT(DISTINCT sales_person) AS seller_count,
+    CASE 
+        WHEN SUM(amount) >= 500000 THEN '高价值市场'
+        WHEN SUM(amount) BETWEEN 200000 AND 499999 THEN '中价值市场'
+        ELSE '低价值市场'
+    END AS market_segment
+FROM chocolate_sales
+GROUP BY country
+ORDER BY total_sales DESC;
+
+# 月度同比分析（2023 vs 2022 同月对比）
+SELECT 
+    MONTH(sale_date) AS month_num,
+    ROUND(SUM(CASE WHEN YEAR(sale_date) = 2022 THEN amount ELSE 0 END), 2) AS sales_2022,
+    ROUND(SUM(CASE WHEN YEAR(sale_date) = 2023 THEN amount ELSE 0 END), 2) AS sales_2023,
+    ROUND(SUM(CASE WHEN YEAR(sale_date) = 2024 THEN amount ELSE 0 END), 2) AS sales_2024,
+    ROUND(
+        (SUM(CASE WHEN YEAR(sale_date) = 2023 THEN amount ELSE 0 END) 
+         - SUM(CASE WHEN YEAR(sale_date) = 2022 THEN amount ELSE 0 END))
+        / NULLIF(SUM(CASE WHEN YEAR(sale_date) = 2022 THEN amount ELSE 0 END), 0) * 100, 
+        2
+    ) AS yoy_growth_2023_vs_2022
+FROM chocolate_sales
+GROUP BY MONTH(sale_date)
+ORDER BY month_num;
 
